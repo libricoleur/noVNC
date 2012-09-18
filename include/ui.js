@@ -18,8 +18,14 @@ connSettingsOpen : false,
 clipboardOpen: false,
 keyboardVisible: false,
 
+// Setup rfb object, load settings from browser storage, then call
+// UI.init to setup the UI/menus
+load: function (callback) {
+    WebUtil.initSettings(UI.start, callback);
+},
+
 // Render default UI and initialize settings menu
-load: function() {
+start: function(callback) {
     var html = '', i, sheet, sheets, llevels;
 
     // Stylesheet selection dropdown
@@ -91,6 +97,7 @@ load: function() {
         //UI.setOnscroll();
         //UI.setResize();
     }
+    UI.setBarPosition();
 
     $D('noVNC_host').focus();
 
@@ -111,14 +118,51 @@ load: function() {
         // Open the connect panel on first load
         UI.toggleConnectPanel();
     }
+
+    // Add mouse event click/focus/blur event handlers to the UI
+    UI.addMouseHandlers();
+
+    if (typeof callback === "function") {
+        callback(UI.rfb);
+    }
+},
+
+addMouseHandlers: function() {
+    // Setup interface handlers that can't be inline
+    $D("noVNC_view_drag_button").onclick = UI.setViewDrag;
+    $D("noVNC_mouse_button0").onclick = function () { UI.setMouseButton(1); };
+    $D("noVNC_mouse_button1").onclick = function () { UI.setMouseButton(2); };
+    $D("noVNC_mouse_button2").onclick = function () { UI.setMouseButton(4); };
+    $D("noVNC_mouse_button4").onclick = function () { UI.setMouseButton(0); };
+    $D("showKeyboard").onclick = UI.showKeyboard;
+    //$D("keyboardinput").onkeydown = function (event) { onKeyDown(event); };
+    $D("keyboardinput").onblur = UI.keyInputBlur;
+
+    $D("sendCtrlAltDelButton").onclick = UI.sendCtrlAltDel;
+    $D("clipboardButton").onclick = UI.toggleClipboardPanel;
+    $D("settingsButton").onclick = UI.toggleSettingsPanel;
+    $D("connectButton").onclick = UI.toggleConnectPanel;
+    $D("disconnectButton").onclick = UI.disconnect;
+    $D("descriptionButton").onclick = UI.toggleConnectPanel;
+
+    $D("noVNC_clipboard_text").onfocus = UI.displayBlur;
+    $D("noVNC_clipboard_text").onblur = UI.displayFocus;
+    $D("noVNC_clipboard_text").onchange = UI.clipSend;
+    $D("noVNC_clipboard_clear_button").onclick = UI.clipClear;
+
+    $D("noVNC_settings_menu").onmouseover = UI.displayBlur;
+    $D("noVNC_settings_menu").onmouseover = UI.displayFocus;
+    $D("noVNC_apply").onclick = UI.settingsApply;
+
+    $D("noVNC_connect_button").onclick = UI.connect;
 },
 
 // Read form control compatible setting from cookie
 getSetting: function(name) {
     var val, ctrl = $D('noVNC_' + name);
-    val = WebUtil.readCookie(name);
-    if (ctrl.type === 'checkbox') {
-        if (val.toLowerCase() in {'0':1, 'no':1, 'false':1}) {
+    val = WebUtil.readSetting(name);
+    if (val !== null && ctrl.type === 'checkbox') {
+        if (val.toString().toLowerCase() in {'0':1, 'no':1, 'false':1}) {
             val = false;
         } else {
             val = true;
@@ -134,7 +178,7 @@ updateSetting: function(name, value) {
     var i, ctrl = $D('noVNC_' + name);
     // Save the cookie for this session
     if (typeof value !== 'undefined') {
-        WebUtil.createCookie(name, value);
+        WebUtil.writeSetting(name, value);
     }
 
     // Update the settings control
@@ -170,7 +214,7 @@ saveSetting: function(name) {
     } else {
         val = ctrl.value;
     }
-    WebUtil.createCookie(name, val);
+    WebUtil.writeSetting(name, val);
     //Util.Debug("Setting saved '" + name + "=" + val + "'");
     return val;
 },
@@ -182,7 +226,7 @@ initSetting: function(name, defVal) {
     // Check Query string followed by cookie
     val = WebUtil.getQueryVar(name);
     if (val === null) {
-        val = WebUtil.readCookie(name, defVal);
+        val = WebUtil.readSetting(name, defVal);
     }
     UI.updateSetting(name, val);
  //Util.Debug("Setting '" + name + "' initialized to '" + val + "'");
@@ -240,6 +284,9 @@ toggleConnectPanel: function() {
         $D('noVNC_controls').style.display = "none";
         $D('connectButton').className = "noVNC_status_button";
         UI.connSettingsOpen = false;
+        UI.saveSetting('host');
+        UI.saveSetting('port');
+        //UI.saveSetting('password');
     } else {
         $D('noVNC_controls').style.display = "block";
         $D('connectButton').className = "noVNC_status_button_selected";
