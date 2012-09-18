@@ -302,7 +302,7 @@ function connect() {
     }
     Util.Info("connecting to " + uri);
     // TODO: make protocols a configurable
-    ws.open(uri, ['base64']);
+    ws.open(uri, ['binary', 'base64']);
 
     Util.Debug("<< RFB.connect");
 }
